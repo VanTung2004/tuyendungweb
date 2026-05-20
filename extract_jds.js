@@ -1,0 +1,149 @@
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+
+const jdDir = './JD';
+const outputDir = './src/data';
+const outputFile = path.join(outputDir, 'jds.json');
+
+function extractJDs() {
+  try {
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const files = fs.readdirSync(jdDir).filter(file => file.endsWith('.pdf'));
+    const jdData = [];
+
+    for (const file of files) {
+      console.log(`Processing file via CLI: ${file}`);
+      const filePath = path.join(jdDir, file);
+      
+      // Run the CLI command to extract text
+      const stdout = execSync(`npx pdf-parse text "${filePath}"`, { encoding: 'utf-8' });
+      
+      let title = '';
+      let category = 'Engineering';
+      let location = 'Hà Nội';
+      let type = 'Toàn thời gian';
+
+      if (file.includes('Consultant')) {
+        title = 'Business Development & Solution Consultant';
+        category = 'Sales';
+      } else if (file.includes('Kế toán')) {
+        title = 'Kế toán & Hành chính tổng hợp';
+        category = 'Backoffice';
+      } else if (file.includes('MKT_Intern')) {
+        title = 'Marketing Intern';
+        category = 'Marketing';
+        type = 'Thực tập';
+      } else if (file.includes('Performance Marketing')) {
+        title = 'Performance Marketing Executive';
+        category = 'Marketing';
+      } else {
+        title = file.replace('Udata_JD_', '').replace('_HaNoi.pdf', '').replace('.pdf', '');
+      }
+
+      const lines = stdout.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const sections = {
+        about: '',
+        duties: [],
+        requirements: [],
+        benefits: [],
+        locationAndTime: ''
+      };
+
+      let currentSection = '';
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Check if header
+        const normalizedLine = line.toUpperCase();
+        
+        if (normalizedLine.includes('VỀ UDATA')) {
+          currentSection = 'about';
+          continue;
+        } else if (normalizedLine.includes('MÔ TẢ CÔNG VIỆC') || normalizedLine.includes('BẠN SẼ LÀM GÌ')) {
+          currentSection = 'duties';
+          continue;
+        } else if (normalizedLine === 'YÊU CẦU' || normalizedLine.includes('YÊU CẦU ỨNG VIÊN')) {
+          currentSection = 'requirements';
+          continue;
+        } else if (normalizedLine.includes('QUYỀN LỢI')) {
+          currentSection = 'benefits';
+          continue;
+        } else if (normalizedLine.includes('ĐỊA ĐIỂM LÀM VIỆC') || normalizedLine.includes('ĐỊA ĐIỂM & GIỜ LÀM VIỆC') || normalizedLine.includes('ĐỊA ĐIỂM VÀ GIỜ LÀM VIỆC')) {
+          currentSection = 'locationAndTime';
+          continue;
+        }
+
+        // Skip footer pages indicator
+        if (line.startsWith('--') && line.endsWith('--')) {
+          continue;
+        }
+
+        if (currentSection === 'about') {
+          if (line.includes('Các sản phẩm chủ lực:') || line.includes('Sản phẩm của chúng tôi:')) {
+            // We can stop about or let it capture
+            currentSection = '';
+          } else {
+            sections.about += (sections.about ? ' ' : '') + line;
+          }
+        } else if (currentSection === 'duties') {
+          // If it's a list item
+          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('o') || /^\d+\./.test(line)) {
+            sections.duties.push(line.replace(/^[•\-o]\s*/, '').replace(/^\d+\.\s*/, ''));
+          } else if (sections.duties.length > 0) {
+            sections.duties[sections.duties.length - 1] += ' ' + line;
+          } else {
+            sections.duties.push(line);
+          }
+        } else if (currentSection === 'requirements') {
+          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('o') || /^\d+\./.test(line)) {
+            sections.requirements.push(line.replace(/^[•\-o]\s*/, '').replace(/^\d+\.\s*/, ''));
+          } else if (sections.requirements.length > 0) {
+            sections.requirements[sections.requirements.length - 1] += ' ' + line;
+          } else {
+            sections.requirements.push(line);
+          }
+        } else if (currentSection === 'benefits') {
+          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('o') || /^\d+\./.test(line)) {
+            sections.benefits.push(line.replace(/^[•\-o]\s*/, '').replace(/^\d+\.\s*/, ''));
+          } else if (sections.benefits.length > 0) {
+            sections.benefits[sections.benefits.length - 1] += ' ' + line;
+          } else {
+            sections.benefits.push(line);
+          }
+        } else if (currentSection === 'locationAndTime') {
+          sections.locationAndTime += (sections.locationAndTime ? ' \n' : '') + line;
+        }
+      }
+
+      // Fallbacks
+      const fallbackAbout = 'Udata là công ty công nghệ chuyên cung cấp giải pháp chuyển đổi xanh và chuyển đổi số cho doanh nghiệp, dựa trên nền tảng AI và AIoT. Chúng tôi đồng hành cùng các nhà máy, tòa nhà và khu công nghiệp trong hành trình số hóa vận hành, tối ưu năng lượng và hướng tới phát triển bền vững.';
+      
+      jdData.push({
+        id: file.replace(/Udata_JD_/, '').replace(/\.pdf$/, '').replace(/&/g, 'and'),
+        filename: file,
+        title,
+        category,
+        location,
+        type,
+        about: sections.about.trim() || fallbackAbout,
+        duties: sections.duties.map(d => d.trim()).filter(d => d.length > 0),
+        requirements: sections.requirements.map(r => r.trim()).filter(r => r.length > 0),
+        benefits: sections.benefits.map(b => b.trim()).filter(b => b.length > 0),
+        locationAndTime: sections.locationAndTime.trim() || 'Hà Nội'
+      });
+    }
+
+    fs.writeFileSync(outputFile, JSON.stringify(jdData, null, 2), 'utf-8');
+    console.log(`Successfully extracted ${jdData.length} JDs to ${outputFile}`);
+  } catch (error) {
+    console.error('Error extracting JDs:', error);
+  }
+}
+
+extractJDs();
