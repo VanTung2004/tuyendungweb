@@ -73,8 +73,14 @@ function extractJDs() {
       } else if (file.includes('Performance Marketing')) {
         title = 'Performance Marketing Executive';
         category = 'Marketing';
+      } else if (file.includes('Kỹ sư triển khai') || file.includes('Ky_su_trien_khai')) {
+        title = 'Kỹ sư Triển khai';
+        category = 'Engineering';
+      } else if (file.includes('Fullstack') || file.includes('fullstack')) {
+        title = 'Fullstack Engineer';
+        category = 'Engineering';
       } else {
-        title = file.replace('Udata_JD_', '').replace('_HaNoi.pdf', '').replace('.pdf', '');
+        title = file.replace('Udata_JD_', '').replace('_HaNoi.pdf', '').replace('_Hanoi.pdf', '').replace('.pdf', '');
       }
 
       const lines = stdout.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -106,47 +112,48 @@ function extractJDs() {
         if (normalizedLine.includes('VỀ UDATA') || normalizedLine.includes('ABOUT UDATA')) {
           currentSection = 'about';
           continue;
-        } else if (normalizedLine.includes('MÔ TẢ CÔNG VIỆC') || normalizedLine.includes('BẠN SẼ LÀM GÌ') || normalizedLine.includes('WHAT WILL YOU DO?')) {
+        } else if (normalizedLine.includes('VAI TRÒ') || normalizedLine.includes('TRÁCH NHIỆM') || normalizedLine.includes('MÔ TẢ CÔNG VIỆC') || normalizedLine.includes('BẠN SẼ LÀM GÌ') || normalizedLine.includes('WHAT WILL YOU DO?')) {
           currentSection = 'duties';
           continue;
-        } else if (normalizedLine === 'YÊU CẦU' || normalizedLine.includes('YÊU CẦU ỨNG VIÊN') || normalizedLine.includes('REQUIREMENTS')) {
+        } else if (normalizedLine.includes('KỸ NĂNG') || normalizedLine === 'YÊU CẦU' || normalizedLine.includes('YÊU CẦU ỨNG VIÊN') || normalizedLine.includes('REQUIREMENTS')) {
           currentSection = 'requirements';
           continue;
         } else if (normalizedLine.includes('QUYỀN LỢI') || normalizedLine.includes('WHAT WILL YOU GAIN') || normalizedLine.includes('PERKS') || normalizedLine.includes('BENEFITS')) {
           currentSection = 'benefits';
           continue;
-        } else if (normalizedLine.includes('ĐỊA ĐIỂM LÀM VIỆC') || normalizedLine.includes('ĐỊA ĐIỂM & GIỜ LÀM VIỆC') || normalizedLine.includes('ĐỊA ĐIỂM VÀ GIỜ LÀM VIỆC') || normalizedLine.includes('LOCATION AND TIME')) {
+        } else if (normalizedLine.includes('THỜI GIAN') || normalizedLine.includes('ĐỊA ĐIỂM LÀM VIỆC') || normalizedLine.includes('ĐỊA ĐIỂM & GIỜ LÀM VIỆC') || normalizedLine.includes('ĐỊA ĐIỂM VÀ GIỜ LÀM VIỆC') || normalizedLine.includes('LOCATION AND TIME')) {
           currentSection = 'locationAndTime';
           continue;
         }
 
         if (currentSection === 'about') {
-          if (line.includes('Các sản phẩm chủ lực:') || line.includes('Sản phẩm của chúng tôi:') || line.includes('Our Core Products')) {
-            // We can stop about or let it capture
+          if (line.includes('Các sản phẩm chủ lực:') || line.includes('Sản phẩm của chúng tôi:') || line.includes('Our Core Products') || line.includes('Sản phẩm bạn sẽ xây dựng')) {
             currentSection = '';
           } else {
             sections.about += (sections.about ? ' ' : '') + line;
           }
         } else if (currentSection === 'duties') {
-          // If it's a list item
-          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('+') || line.startsWith('o') || /^\d+\./.test(line)) {
-            sections.duties.push(line.replace(/^[•\-+o]\s*/, '').replace(/^\d+\.\s*/, ''));
+          // If it's a numbered section header like "1. Triển khai dự án:" - treat it as a section label, not a bullet
+          if (/^\d+\.\s+[^\d]/.test(line) && line.endsWith(':')) {
+            sections.duties.push(line); // keep as header
+          } else if (line.startsWith('•') || line.startsWith('-') || line.startsWith('–') || line.startsWith('+') || line.startsWith('o') || /^\d+\./.test(line)) {
+            sections.duties.push(line.replace(/^[•\-–+o]\s*/, '').replace(/^\d+\.\s*/, ''));
           } else if (sections.duties.length > 0) {
             sections.duties[sections.duties.length - 1] += ' ' + line;
           } else {
             sections.duties.push(line);
           }
         } else if (currentSection === 'requirements') {
-          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('+') || line.startsWith('o') || /^\d+\./.test(line)) {
-            sections.requirements.push(line.replace(/^[•\-+o]\s*/, '').replace(/^\d+\.\s*/, ''));
+          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('–') || line.startsWith('+') || line.startsWith('o') || /^\d+\./.test(line)) {
+            sections.requirements.push(line.replace(/^[•\-–+o]\s*/, '').replace(/^\d+\.\s*/, ''));
           } else if (sections.requirements.length > 0) {
             sections.requirements[sections.requirements.length - 1] += ' ' + line;
           } else {
             sections.requirements.push(line);
           }
         } else if (currentSection === 'benefits') {
-          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('+') || line.startsWith('o') || /^\d+\./.test(line)) {
-            sections.benefits.push(line.replace(/^[•\-+o]\s*/, '').replace(/^\d+\.\s*/, ''));
+          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('–') || line.startsWith('+') || line.startsWith('o') || /^\d+\./.test(line)) {
+            sections.benefits.push(line.replace(/^[•\-–+o]\s*/, '').replace(/^\d+\.\s*/, ''));
           } else if (sections.benefits.length > 0) {
             sections.benefits[sections.benefits.length - 1] += ' ' + line;
           } else {
